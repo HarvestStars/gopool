@@ -1,4 +1,4 @@
-package rpc
+package server
 
 import (
 	"bytes"
@@ -8,53 +8,34 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
-	"sync"
-	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/go-pool/protocol"
+	"github.com/HarvestStars/gopool/protocol"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jinzhu/gorm"
 )
 
+// lava接口数据库通信
 var DataBase *gorm.DB
 var RedisPWD string
 var RdsConn redis.Conn
-var mutex sync.Mutex
+var RdsHost string
+var RdsPWD string
 
-// MiningHandler is a midware for mining
-func MiningHandler(c *gin.Context) {
-	miningReq := &protocol.Req{}
-	err := c.Bind(miningReq)
-	if err != nil {
-		return
-	}
-	switch miningReq.Method {
-	case "getmininginfo":
-		resp, err := getMiningInfo(miningReq.Params)
-		c.JSON(200, gin.H{"result": resp.Result, "error": err, "id": resp.ID})
-	case "submitnonce":
-		res, err := submitNonce(miningReq.Params)
-		c.JSON(200, gin.H{"result": res, "error": err, "id": "curltest"})
-	case "async":
-		fmt.Print("这是一次请求\n")
-		time.Sleep(time.Duration(30) * time.Second)
-		c.JSON(200, gin.H{"result": "time out", "error": nil, "id": "curltest"})
-	default:
-		return
-	}
-}
+// 负载均衡
+var LavadHost []string
+var MiningInfoIndex int = 0
+var SubmitIndex int = 0
 
-func getMiningInfo(Params []interface{}) (*protocol.Resp, error) {
+func getMiningInfo() (*protocol.Resp, error) {
 	Req := &protocol.Req{
 		JSONRPC: "1.0",
 		ID:      "curltest",
 		Method:  "getmininginfo",
-		Params:  Params,
+		Params:  []interface{}{},
 	}
 	reqByte, _ := json.Marshal(&Req)
 	readByte := bytes.NewReader(reqByte)
-	resp, err := http.Post("http://test:test@127.0.0.1:18332/", "application/json", readByte)
+	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil, err
@@ -63,6 +44,12 @@ func getMiningInfo(Params []interface{}) (*protocol.Resp, error) {
 	Res := &protocol.Resp{}
 	body, _ := ioutil.ReadAll(resp.Body)
 	json.Unmarshal(body, Res)
+
+	// 负载均衡
+	lavaServerCount := len(LavadHost)
+	MiningInfoIndex++
+	MiningInfoIndex = MiningInfoIndex % lavaServerCount
+
 	return Res, nil
 }
 
@@ -80,19 +67,17 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 	dl := arrayV[2].(float64)
 	height := arrayV[3].(float64)
 
-	//
-	RdsConn, err := redis.Dial("tcp", "localhost:6379")
+	// redis 短链接
+	RdsConn, err := redis.Dial("tcp", RdsHost)
 	if err != nil {
 		fmt.Print(err.Error())
 	}
 	defer RdsConn.Close()
-	var pwd string = "123456"
-	if _, err := RdsConn.Do("AUTH", pwd); err != nil {
+	if _, err := RdsConn.Do("AUTH", RdsPWD); err != nil {
 		fmt.Print("redis auth error \n", err.Error())
 		panic("failed to connect redis")
 	}
 
-	//mutex.Lock()
 	bestHeight, _ := redis.Float64(RdsConn.Do("get", "best_height"))
 	if int(bestHeight) == 0 {
 		hInt := int64(height)
@@ -111,7 +96,7 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 		}
 	}
 	bestDL, _ := redis.Float64(RdsConn.Do("get", address))
-	//mutex.Unlock()
+
 	if dl < bestDL || bestDL == 0 {
 		// good dl, send to lavad
 		reqByte, err := json.Marshal(&Req)
@@ -119,7 +104,7 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 			fmt.Print(err.Error())
 		}
 		readByte := bytes.NewReader(reqByte)
-		resp, err := http.Post("http://test:test@127.0.0.1:18332/", "application/json", readByte)
+		resp, err := http.Post(LavadHost[SubmitIndex], "application/json", readByte)
 		if err != nil {
 			fmt.Print(err.Error())
 			return protocol.Accept{Accept: false}, nil
@@ -131,6 +116,11 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 		respValue := reflect.ValueOf(Res.Result)
 		resMap := respValue.Interface().(map[string]interface{})
 
+		// 负载均衡
+		lavaServerCount := len(LavadHost)
+		SubmitIndex++
+		SubmitIndex = SubmitIndex % lavaServerCount
+
 		// 解析Res，并设置最佳成绩
 		// 被接受表示返回值数量 > 1
 		if len(resMap) > 1 {
@@ -139,7 +129,7 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 			dlStr := strconv.FormatInt(dlInt, 10)
 			RdsConn.Do("set", address, dlStr)
 
-			// 写入mysql 清算
+			// 写入mysql
 			DataBase.Create(&protocol.MinerInfo{Addr: address, Nonce: nonce, DL: dl, Height: height})
 		}
 		return Res.Result, nil

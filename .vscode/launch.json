@@ -9,7 +9,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "C:/Users/dell/go/src/github.com/go-pool",
+            "program": "C:/Users/dell/go/src/github.com/HarvestStars/gopool",
             "env": {},
             "args": []
         }
