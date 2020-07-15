@@ -94,6 +94,6 @@ func checkBindingMap(height int, address string) bool {
 	if height-5 > 0 {
 		delete(BindMap, BlockHeight(height-5))
 	}
-	log.Printf("%s 绑定关系已经在缓存中", address)
+
 	return true
 }

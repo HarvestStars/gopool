@@ -40,7 +40,7 @@ var PoolSetting = &PoolConf{}
 
 // Setup 启动配置
 func Setup() {
-	cfg, err := ini.Load("conf/my.ini")
+	cfg, err := ini.Load("../../conf/my.ini")
 	if err != nil {
 		log.Fatalf("Fail to parse 'conf/app.ini': %v", err)
 	}
