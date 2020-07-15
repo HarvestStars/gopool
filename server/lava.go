@@ -3,8 +3,9 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -37,7 +38,7 @@ func getMiningInfo() (*protocol.Resp, error) {
 	readByte := bytes.NewReader(reqByte)
 	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -53,28 +54,22 @@ func getMiningInfo() (*protocol.Resp, error) {
 	return Res, nil
 }
 
-func submitNonce(Params []interface{}) (interface{}, error) {
+func submitNonce(Params []interface{}, address string, nonce string, dl float64, height float64) (interface{}, error) {
 	Req := &protocol.Req{
 		JSONRPC: "1.0",
 		ID:      "curltest",
 		Method:  "submitnonce",
 		Params:  Params,
 	}
-	v := reflect.ValueOf(Req.Params)
-	arrayV := v.Interface().([]interface{})
-	address := arrayV[0].(string)
-	nonce := arrayV[1].(string)
-	dl := arrayV[2].(float64)
-	height := arrayV[3].(float64)
 
 	// redis 短链接
 	RdsConn, err := redis.Dial("tcp", RdsHost)
 	if err != nil {
-		fmt.Print(err.Error())
+		log.Print(err.Error())
 	}
 	defer RdsConn.Close()
 	if _, err := RdsConn.Do("AUTH", RdsPWD); err != nil {
-		fmt.Print("redis auth error \n", err.Error())
+		log.Print("redis auth error \n", err.Error())
 		panic("failed to connect redis")
 	}
 
@@ -90,9 +85,9 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 		RdsConn.Do("set", "best_height", hStr)
 		del, err := redis.Bool(RdsConn.Do("DEL", address))
 		if err != nil {
-			fmt.Println("del action is failed", err)
+			log.Println("del action is failed", err)
 		} else {
-			fmt.Println("del action is:", del)
+			log.Println("del action is:", del)
 		}
 	}
 	bestDL, _ := redis.Float64(RdsConn.Do("get", address))
@@ -101,12 +96,12 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 		// good dl, send to lavad
 		reqByte, err := json.Marshal(&Req)
 		if err != nil {
-			fmt.Print(err.Error())
+			log.Print(err.Error())
 		}
 		readByte := bytes.NewReader(reqByte)
 		resp, err := http.Post(LavadHost[SubmitIndex], "application/json", readByte)
 		if err != nil {
-			fmt.Print(err.Error())
+			log.Print(err.Error())
 			return protocol.Accept{Accept: false}, nil
 		}
 		defer resp.Body.Close()
@@ -135,4 +130,39 @@ func submitNonce(Params []interface{}) (interface{}, error) {
 		return Res.Result, nil
 	}
 	return protocol.Accept{Accept: false}, nil
+}
+
+func getBindingInfo(miner string) (string, error) {
+	// from miner get to
+	params := make([]interface{}, 0)
+	params = append(params, miner)
+	Req := &protocol.Req{
+		JSONRPC: "1.0",
+		ID:      "curltest",
+		Method:  "getbindinginfo",
+		Params:  params,
+	}
+	reqByte, err := json.Marshal(&Req)
+	if err != nil {
+		log.Print(err.Error())
+	}
+	readByte := bytes.NewReader(reqByte)
+	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
+	if err != nil {
+		return "", errors.New("lavad server down")
+	}
+	defer resp.Body.Close()
+	Res := &protocol.Resp{}
+	body, _ := ioutil.ReadAll(resp.Body)
+	json.Unmarshal(body, Res)
+	respValue := reflect.ValueOf(Res.Result)
+	resMap := respValue.Interface().(map[string]interface{})
+	if to, ok := resMap["to"]; ok {
+		toMap := to.(map[string]interface{})
+		if toAddress, isIn := toMap["address"]; isIn {
+			toAdrStr := toAddress.(string)
+			return toAdrStr, nil
+		}
+	}
+	return "", errors.New("miner not binding pool")
 }

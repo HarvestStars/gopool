@@ -2,6 +2,7 @@ package server
 
 import (
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/HarvestStars/gopool/protocol"
@@ -12,12 +13,11 @@ import (
 func MiningHandler(c *gin.Context) {
 	// 检验地址是否注册
 	cpy := c.Copy()
-	if isReg := isRegistered(cpy); !isReg {
+	miner, isReg := isRegistered(cpy)
+	if !isReg {
+		log.Printf("%s does not regeistered", miner)
 		return
 	}
-
-	// 检验地址绑定
-	// TODO: 检验方式是与lavad通信，还是本地数据库通信
 
 	// 获取body
 	miningReq := &protocol.Req{}
@@ -32,13 +32,35 @@ func MiningHandler(c *gin.Context) {
 	case "getmininginfo":
 		resp, err := getMiningInfo()
 		c.JSON(200, gin.H{"result": resp.Result, "error": err, "id": resp.ID})
+
 	case "submitnonce":
-		res, err := submitNonce(miningReq.Params)
+		v := reflect.ValueOf(miningReq.Params)
+		arrayV := v.Interface().([]interface{})
+		address := arrayV[0].(string)
+		nonce := arrayV[1].(string)
+		dl := arrayV[2].(float64)
+		height := arrayV[3].(float64)
+
+		if address != miner {
+			// accountKey != miner in the miner.conf
+			// miner wants to cheat me
+			return
+		}
+
+		// 验证链上绑定关系
+		checked := checkBindingMap(int(height), address)
+		if !checked {
+			return
+		}
+
+		res, err := submitNonce(miningReq.Params, address, nonce, dl, height)
 		c.JSON(200, gin.H{"result": res, "error": err, "id": "curltest"})
+
 	case "async":
 		log.Print("test async once.")
 		time.Sleep(time.Duration(30) * time.Second)
 		c.JSON(200, gin.H{"result": "time out", "error": nil, "id": "curltest"})
+
 	default:
 		log.Print("client invalid request.")
 		return

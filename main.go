@@ -21,6 +21,8 @@ func main() {
 	// 设置pool服务信息
 	server.PoolAddrs = setting.PoolSetting.Address
 	poolHost := setting.PoolSetting.Host
+	// 初始化绑定关系表
+	server.BindMap = make(map[server.BlockHeight]map[server.MinerName]string)
 
 	// 打开服务
 	r := gin.Default()
