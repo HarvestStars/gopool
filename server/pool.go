@@ -3,6 +3,7 @@ package server
 import (
 	"log"
 
+	"github.com/HarvestStars/gopool/db"
 	"github.com/gin-gonic/gin"
 	"github.com/gomodule/redigo/redis"
 )
@@ -29,14 +30,9 @@ func isRegistered(cpy *gin.Context) (string, bool) {
 	if v, ok := cpy.Request.Header["Account-Key"]; ok {
 		miner := v[0]
 		// redis 短链接
-		RdsConn, err := redis.Dial("tcp", RdsHost)
+		RdsConn, err := db.RediShortConn(db.RdsHost, db.RdsPWD)
 		if err != nil {
-			log.Print(err.Error())
-			return miner, false
-		}
-		defer RdsConn.Close()
-		if _, err := RdsConn.Do("AUTH", RdsPWD); err != nil {
-			log.Print(err.Error())
+			log.Print("isRegistered: redis error", err.Error())
 			return miner, false
 		}
 
