@@ -155,3 +155,122 @@ func getBindingInfo(miner string) (string, error) {
 	}
 	return "", errors.New("miner not binding pool")
 }
+
+// GetBlockCount 获取最新块高
+func GetBlockCount() (float64, error) {
+	Req := &protocol.Req{
+		JSONRPC: "1.0",
+		ID:      "curltest",
+		Method:  "getblockcount",
+		Params:  []interface{}{},
+	}
+	reqByte, _ := json.Marshal(&Req)
+	readByte := bytes.NewReader(reqByte)
+	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
+	if err != nil {
+		log.Println("GetBlockCount:", err.Error())
+		return float64(0), err
+	}
+	defer resp.Body.Close()
+	Res := &protocol.Resp{}
+	body, _ := ioutil.ReadAll(resp.Body)
+	json.Unmarshal(body, Res)
+	respValue := reflect.ValueOf(Res.Result)
+	currentHeight := respValue.Interface().(float64)
+	return currentHeight, nil
+}
+
+// GetBlockHash 找到对应高度的区块hash
+func GetBlockHash(height float64) (string, error) {
+	params := make([]interface{}, 0, 1)
+	params = append(params, height)
+	Req := &protocol.Req{
+		JSONRPC: "1.0",
+		ID:      "curltest",
+		Method:  "getblockhash",
+		Params:  params,
+	}
+	reqByte, _ := json.Marshal(&Req)
+	readByte := bytes.NewReader(reqByte)
+	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
+	if err != nil {
+		log.Println("GetBlockHash:", err.Error())
+		return "", err
+	}
+	defer resp.Body.Close()
+	Res := &protocol.Resp{}
+	body, _ := ioutil.ReadAll(resp.Body)
+	json.Unmarshal(body, Res)
+	respValue := reflect.ValueOf(Res.Result)
+	blockHash := respValue.Interface().(string)
+	return blockHash, nil
+}
+
+// GetBlockCoinBaseTXID 获取某个区块中的coinbase txid
+func GetBlockCoinBaseTXID(blockid string) (string, error) {
+	params := make([]interface{}, 0, 1)
+	params = append(params, blockid)
+	Req := &protocol.Req{
+		JSONRPC: "1.0",
+		ID:      "curltest",
+		Method:  "getblock",
+		Params:  params,
+	}
+	reqByte, _ := json.Marshal(&Req)
+	readByte := bytes.NewReader(reqByte)
+	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
+	if err != nil {
+		log.Println("GetBlockCoinBaseTXID:", err.Error())
+		return "", err
+	}
+	defer resp.Body.Close()
+	Res := &protocol.Resp{}
+	body, _ := ioutil.ReadAll(resp.Body)
+	json.Unmarshal(body, Res)
+	respValue := reflect.ValueOf(Res.Result)
+	block := respValue.Interface().(map[string]interface{})
+	txIDs, ok := block["tx"]
+	if !ok {
+		return "", errors.New("No txs in this block")
+	}
+	txValues := reflect.ValueOf(txIDs)
+	coinBase := txValues.Index(0).Interface().(string)
+	return coinBase, nil
+}
+
+// GetCoinBase 获取coinbase对应的rawtx
+func GetCoinBase(txid string) (string, float64, error) {
+	params := make([]interface{}, 0, 1)
+	params = append(params, txid)
+	params = append(params, true)
+	Req := &protocol.Req{
+		JSONRPC: "1.0",
+		ID:      "curltest",
+		Method:  "getrawtransaction",
+		Params:  params,
+	}
+	reqByte, _ := json.Marshal(&Req)
+	readByte := bytes.NewReader(reqByte)
+	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
+	if err != nil {
+		log.Println("GetCoinBase:", err.Error())
+		return "", float64(0), err
+	}
+	defer resp.Body.Close()
+	Res := &protocol.Resp{}
+	body, _ := ioutil.ReadAll(resp.Body)
+	json.Unmarshal(body, Res)
+	respValue := reflect.ValueOf(Res.Result)
+	rawTx := respValue.Interface().(map[string]interface{})
+	vouts, ok := rawTx["vout"]
+	if !ok {
+		return "", float64(0), errors.New("No vout in this tx")
+	}
+	vout0 := reflect.ValueOf(vouts)
+	vout0Map := vout0.Index(0).Interface().(map[string]interface{})
+	coin := vout0Map["value"].(float64)
+	scriptPubKey := vout0Map["scriptPubKey"].(map[string]interface{})
+	addressSlice := scriptPubKey["addresses"]
+	coinBaseMiner := reflect.ValueOf(addressSlice).Index(0).Interface().(string)
+	return coinBaseMiner, coin, nil
+}
