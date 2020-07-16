@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/HarvestStars/gopool/db"
 	"github.com/HarvestStars/gopool/server"
 	"github.com/HarvestStars/gopool/setting"
@@ -29,8 +33,23 @@ func main() {
 		panic("redis clean error, please check redis server is running.")
 	}
 
+	// 打开本地出块记录数据库
+	c := make(chan int)
+	go server.RecordCoinBase(c)
 	// 打开服务
 	r := gin.Default()
 	r.POST("/", server.MiningHandler)
-	r.Run(poolHost)
+	go r.Run(poolHost)
+
+	terminal := make(chan os.Signal)
+	signal.Notify(terminal, os.Interrupt, syscall.SIGTERM)
+	for {
+		select {
+		case <-terminal:
+			server.DBTerminal <- 1
+		case <-c:
+			return
+		}
+	}
+
 }

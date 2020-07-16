@@ -114,7 +114,7 @@ func submitNonce(Params []interface{}, address string, nonce string, dl float64,
 			RdsConn.Do("set", "miner_best_"+address, dlStr)
 
 			// 写入mysql
-			db.DataBase.Create(&protocol.MinerInfo{Addr: address, Nonce: nonce, DL: dl, Height: height})
+			db.DataBase.Model(&protocol.MinerInfo{}).Create(&protocol.MinerInfo{Addr: address, Nonce: nonce, DL: dl, Height: height})
 		}
 		return Res.Result, nil
 	}

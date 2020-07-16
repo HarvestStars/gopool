@@ -2,8 +2,10 @@ package server
 
 import (
 	"log"
+	"time"
 
 	"github.com/HarvestStars/gopool/db"
+	"github.com/HarvestStars/gopool/protocol"
 	"github.com/gin-gonic/gin"
 	"github.com/gomodule/redigo/redis"
 )
@@ -88,8 +90,56 @@ func checkBindingMap(height int, address string) bool {
 
 	// 删除5个块以前的关系
 	if height-5 > 0 {
-		delete(BindMap, BlockHeight(height-5))
+		if _, ok := BindMap[BlockHeight(height-5)]; ok {
+			delete(BindMap, BlockHeight(height-5))
+		}
 	}
 
 	return true
+}
+
+// DBTerminal
+var DBTerminal chan int = make(chan int)
+var BestHeight int
+
+// RecordCoinBase go协程启动
+func RecordCoinBase(c chan int) {
+	d := time.Duration(time.Second * 10)
+	t := time.NewTicker(d)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			lastBlock := &protocol.BlockMined{}
+			db.DataBase.Model(&protocol.BlockMined{}).Last(lastBlock)
+			BestHeight = int(lastBlock.Height)
+			count, err := GetBlockCount()
+			if err != nil {
+				DBTerminal <- 1
+			}
+			if int(count) > BestHeight {
+				for height := BestHeight + 1; height <= int(count); height++ {
+					blockid, err := GetBlockHash(float64(height))
+					if err != nil {
+						DBTerminal <- 1
+					}
+					txid, err := GetBlockCoinBaseTXID(blockid)
+					if err != nil {
+						DBTerminal <- 1
+					}
+					address, coinbase, err := GetCoinBase(txid)
+					if err != nil {
+						DBTerminal <- 1
+					}
+					db.DataBase.Model(&protocol.BlockMined{}).Create(&protocol.BlockMined{Height: float64(height), BlockID: blockid, Miner: address, CoinBase: coinbase})
+				}
+			}
+
+		case <-DBTerminal:
+			db.DataBase.Close()
+			log.Print("shut down BlockChain SQL DB")
+			c <- 1
+			return
+		}
+	}
 }

@@ -14,7 +14,8 @@ type MinerInfo struct {
 
 type BlockMined struct {
 	gorm.Model
-	Miner    string
 	Height   float64
+	BlockID  string
+	Miner    string
 	CoinBase float64
 }

@@ -18,5 +18,5 @@ func Setup(user string, pwd string, host string, db string) {
 	if err != nil {
 		panic("failed to connect database")
 	}
-	DataBase.AutoMigrate(&protocol.MinerInfo{})
+	DataBase.AutoMigrate(&protocol.MinerInfo{}, &protocol.BlockMined{})
 }
