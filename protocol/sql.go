@@ -19,3 +19,15 @@ type BlockMined struct {
 	Miner    string
 	CoinBase float64
 }
+
+type LiquidInfo struct {
+	gorm.Model
+	Miner   string
+	Height  int32
+	Benefit float64
+}
+
+type LiquidHeight struct {
+	gorm.Model
+	Height int32
+}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/HarvestStars/gopool/protocol"
 	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/mysql"
 )
 
 // mysql接口
@@ -18,5 +19,5 @@ func Setup(user string, pwd string, host string, db string) {
 	if err != nil {
 		panic("failed to connect database")
 	}
-	DataBase.AutoMigrate(&protocol.MinerInfo{}, &protocol.BlockMined{})
+	DataBase.AutoMigrate(&protocol.MinerInfo{}, &protocol.BlockMined{}, &protocol.LiquidInfo{}, &protocol.LiquidHeight{})
 }
