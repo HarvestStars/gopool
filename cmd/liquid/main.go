@@ -24,7 +24,7 @@ func main() {
 
 	// 开始清算
 	var currentHeightOnCache int = 0
-	threshold := 2
+	threshold := 6
 	for {
 		liquidHeight := &protocol.LiquidHeight{}
 		db.DataBase.Model(&protocol.LiquidHeight{}).Last(liquidHeight)

@@ -27,7 +27,7 @@ func getMiningInfo() (*protocol.Resp, error) {
 		Method:  "getmininginfo",
 		Params:  []interface{}{},
 	}
-	reqByte, _ := json.Marshal(&Req)
+	reqByte, _ := json.Marshal(Req)
 	readByte := bytes.NewReader(reqByte)
 	resp, err := http.Post(LavadHost[MiningInfoIndex], "application/json", readByte)
 	if err != nil {
@@ -83,7 +83,7 @@ func submitNonce(Params []interface{}, address string, nonce string, dl float64,
 
 	if dl < bestDL || bestDL == 0 {
 		// good dl, send to lavad
-		reqByte, err := json.Marshal(&Req)
+		reqByte, err := json.Marshal(Req)
 		if err != nil {
 			log.Print(err.Error())
 		}
