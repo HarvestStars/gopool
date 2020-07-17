@@ -24,6 +24,7 @@ func main() {
 
 	// 开始清算
 	var currentHeightOnCache int = 0
+	threshold := 2
 	for {
 		liquidHeight := &protocol.LiquidHeight{}
 		db.DataBase.Model(&protocol.LiquidHeight{}).Last(liquidHeight)
@@ -33,11 +34,11 @@ func main() {
 		}
 		currentHeightOnCache = int(currentHeight)
 
-		for h := liquidHeight.Height; h <= int32(currentHeight); h++ {
+		for h := liquidHeight.Height + 1; h < int32(currentHeight)-int32(threshold); h++ {
 			log.Printf("Scan Height: %d.", h)
 			h := int32(h)
 			// confirmed block > 2
-			if int32(currentHeight)-h > 2 {
+			if int32(currentHeight)-h > int32(threshold) {
 				blkID, _ := server.GetBlockHash(float64(h))
 				blockMined := &protocol.BlockMined{}
 				db.DataBase.Model(&protocol.BlockMined{}).Where("height = ?", float64(h)).First(blockMined)
