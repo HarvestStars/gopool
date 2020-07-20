@@ -3,11 +3,15 @@ package server
 import (
 	"log"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/HarvestStars/gopool/protocol"
 	"github.com/gin-gonic/gin"
 )
+
+// MinersChannelGroup 管理每个miner的redis最优解GET和SET
+var MinersChannelGroup sync.Map
 
 // MiningHandler is a midware for mining
 func MiningHandler(c *gin.Context) {
@@ -53,7 +57,14 @@ func MiningHandler(c *gin.Context) {
 			return
 		}
 
-		res, err := submitNonce(miningReq.Params, address, nonce, dl, height)
+		// sync.Map 解决miner提交高并发的资源竞争问题
+		newChan := make(chan int, 1)
+		minerChan, ok := MinersChannelGroup.LoadOrStore(address, newChan)
+		minerChanInt := minerChan.(chan int)
+		if !ok {
+			minerChanInt <- 1
+		}
+		res, err := submitNonce(miningReq.Params, address, nonce, dl, height, minerChanInt)
 		c.JSON(200, gin.H{"result": res, "error": err, "id": "curltest"})
 
 	case "async":

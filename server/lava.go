@@ -47,7 +47,13 @@ func getMiningInfo() (*protocol.Resp, error) {
 	return Res, nil
 }
 
-func submitNonce(Params []interface{}, address string, nonce string, dl float64, height float64) (interface{}, error) {
+func submitNonce(Params []interface{}, address string, nonce string, dl float64, height float64, minerChan chan int) (interface{}, error) {
+	_, ok := <-minerChan
+	if !ok {
+		log.Print("submitNonce: minerChan is closed")
+	}
+	defer func() { minerChan <- 1 }()
+	log.Printf("submitNonce: miner %s submit nonce, height is %d", address, int32(height))
 	Req := &protocol.Req{
 		JSONRPC: "1.0",
 		ID:      "curltest",
@@ -61,6 +67,7 @@ func submitNonce(Params []interface{}, address string, nonce string, dl float64,
 		log.Print("submitnonce: redis error", err.Error())
 		return protocol.Accept{Accept: false}, nil
 	}
+	defer RdsConn.Close()
 
 	bestHeight, _ := redis.Float64(RdsConn.Do("get", "best_height"))
 	if int(bestHeight) == 0 {
