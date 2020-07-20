@@ -53,7 +53,7 @@ func submitNonce(Params []interface{}, address string, nonce string, dl float64,
 		log.Print("submitNonce: minerChan is closed")
 	}
 	defer func() { minerChan <- 1 }()
-	log.Printf("submitNonce: miner %s submit nonce, height is %d", address, int32(height))
+
 	Req := &protocol.Req{
 		JSONRPC: "1.0",
 		ID:      "curltest",
@@ -121,6 +121,7 @@ func submitNonce(Params []interface{}, address string, nonce string, dl float64,
 			RdsConn.Do("set", "miner_best_"+address, dlStr)
 
 			// 写入mysql
+			log.Printf("submitNonce: DL Comfirmed, miner %s submit nonce, height is %d", address, int32(height))
 			db.DataBase.Model(&protocol.MinerInfo{}).Create(&protocol.MinerInfo{Addr: address, Nonce: nonce, DL: dl, Height: height})
 		}
 		return Res.Result, nil
